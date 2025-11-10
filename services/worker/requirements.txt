@@ -1,0 +1,6 @@
+redis
+rq
+httpx
+pydantic
+pydantic-settings
+

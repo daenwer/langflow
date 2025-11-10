@@ -1,0 +1,98 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    volumes:
+      - ollama:/root/.ollama
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rq-dashboard:
+    image: eoranged/rq-dashboard:latest
+    container_name: rq-dashboard
+    restart: unless-stopped
+    environment:
+      RQ_DASHBOARD_REDIS_URL: redis://redis:6379/0
+    ports:
+      - "9181:9181"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  langflow-init:
+    image: langflowai/langflow:1.6.5
+    user: "0:0"
+    volumes:
+      - langflow-data:/data
+    command: >
+      sh -lc 'mkdir -p /data && OWNER="$(stat -c %u /data 2>/dev/null || stat -f %u /data)" && [ "$OWNER" = "1000" ] || chown -R 1000:1000 /data'
+    restart: "no"
+
+  langflow:
+    image: langflowai/langflow:1.6.5
+    ports:
+      - "7860:7860"
+    environment:
+      - LANGFLOW_DATABASE_URL=sqlite:////data/langflow.db
+      - LANGFLOW_CONFIG_DIR=/data
+      - LANGFLOW_AUTH_DISABLED=true
+      - LANGFLOW_BACKEND_ONLY=false
+      # - LANGFLOW_SKIP_AUTH_AUTO_LOGIN=true
+    volumes:
+      - langflow-data:/data
+    depends_on:
+      - langflow-init
+
+  queue-api:
+    build: ./services/api
+    container_name: queue-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - QUEUE_NAME=langflow.queue
+      - LANGFLOW_URL=http://langflow:7860
+    depends_on:
+      redis:
+        condition: service_healthy
+      langflow:
+        condition: service_started
+    volumes:
+      - ./services/api/app:/app/app
+
+  worker:
+    build: ./services/worker
+    container_name: worker
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LANGFLOW_URL=http://langflow:7860
+      - QUEUE_NAME=langflow.queue
+    depends_on:
+      redis:
+        condition: service_healthy
+      langflow:
+        condition: service_started
+
+volumes:
+  ollama:
+  redis_data:
+  langflow-data:

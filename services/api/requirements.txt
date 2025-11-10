@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+redis
+rq
+httpx
+pydantic
+pydantic-settings
+

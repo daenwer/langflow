@@ -1,0 +1,66 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Langflow",
+      "type": "debugpy",
+      "request": "launch",
+      "justMyCode": false,
+      "module": "langflow",
+      "args": [
+        "run",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "7860"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      // Ensure the workspace venv is used
+      "python": "${workspaceFolder}/venv/bin/python",
+      "env": {
+        "LANGFLOW_SKIP_AUTH_AUTO_LOGIN": "true"
+      }
+    },
+    {
+      "name": "FastAPI",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload"
+      ],
+      "jinja": true,
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/services/api",
+      "env": {
+        "REDIS_URL": "redis://localhost:6379/0",
+        "QUEUE_NAME": "langflow.queue",
+        "LANGFLOW_URL": "http://localhost:7860"
+      },
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/venv/bin/python"
+    },
+    {
+      "name": "Worker",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/services/worker/worker_runner.py",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/services/worker",
+      "env": {
+        "REDIS_URL": "redis://localhost:6379/0",
+        "LANGFLOW_URL": "http://localhost:7860",
+        "QUEUE_NAME": "langflow.queue"
+      },
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/venv/bin/python"
+    }
+  ]
+}
+

@@ -1,0 +1,34 @@
+.DS_Store
+venv/
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+*.log
+.env
+.python-version
+.idea/
+tmp/
+docker-compose.override.yml
+*.sqlite3
+
+# Redis / DB dumps
+dump.rdb
+*.bak
+
+# Node / frontend artifacts
+node_modules/
+dist/
+build/
+
+# Coverage / test reports
+.coverage
+coverage.xml
+*.pytest_cache/
+
+# Ollama / Langflow data volumes
+ollama/
+langflow-data/
+redis_data/
+
