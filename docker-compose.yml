@@ -24,14 +24,14 @@ services:
       timeout: 3s
       retries: 5
 
-  rq-dashboard:
-    image: eoranged/rq-dashboard:latest
-    container_name: rq-dashboard
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
     restart: unless-stopped
     environment:
-      RQ_DASHBOARD_REDIS_URL: redis://redis:6379/0
+      - REDIS_HOSTS=local:redis:6379
     ports:
-      - "9181:9181"
+      - "8081:8081"
     depends_on:
       redis:
         condition: service_healthy
@@ -54,7 +54,7 @@ services:
       - LANGFLOW_CONFIG_DIR=/data
       - LANGFLOW_AUTH_DISABLED=true
       - LANGFLOW_BACKEND_ONLY=false
-      # - LANGFLOW_SKIP_AUTH_AUTO_LOGIN=true
+      - LANGFLOW_SKIP_AUTH_AUTO_LOGIN=true
     volumes:
       - langflow-data:/data
     depends_on:
@@ -77,6 +77,7 @@ services:
         condition: service_started
     volumes:
       - ./services/api/app:/app/app
+      - ./services/langflow_queue:/app/langflow_queue
 
   worker:
     build: ./services/worker
@@ -91,6 +92,8 @@ services:
         condition: service_healthy
       langflow:
         condition: service_started
+    volumes:
+      - ./services/langflow_queue:/app/langflow_queue
 
 volumes:
   ollama:

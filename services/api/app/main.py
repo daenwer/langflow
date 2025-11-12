@@ -1,18 +1,14 @@
-from fastapi import FastAPI, HTTPException, Body, Query
+from fastapi import FastAPI, HTTPException, Body, Query, Request
+import json
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from enum import Enum
-import uuid
-from rq import Queue
-from rq.job import Job
-from redis import Redis
-import os
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-QUEUE_NAME = os.getenv("QUEUE_NAME", "langflow.queue")
+from langflow_queue.factory import init_queue_connector
+from .task_utils import build_task_record
 
-redis_conn = Redis.from_url(REDIS_URL)
-task_queue = Queue(QUEUE_NAME, connection=redis_conn)
+
+queue_connector = init_queue_connector()
 
 app = FastAPI(title="Langflow Queue API")
 
@@ -32,8 +28,8 @@ class TaskResponse(BaseModel):
 
 
 class EventDeliveryType(str, Enum):
-    STREAMING = "streaming"
-    DIRECT = "direct"
+    # STREAMING = "streaming"
+    # DIRECT = "direct"
     POLLING = "polling"
 
 
@@ -56,49 +52,52 @@ class BuildFlowResponse(BaseModel):
     flow_id: str
 
 
-@app.post("/tasks", response_model=TaskResponse)
-def create_task(req: TaskRequest):
-    task_id = str(uuid.uuid4())
-    payload = {
-        "input_value": req.input_value,
-        "input_type": req.input_type,
-        "tweaks": req.tweaks,
-        "session_id": req.session_id,
-    }
+def _parse_response_events(response: Optional[dict[str, Any]]) -> dict[str, Any]:
+    if not isinstance(response, dict):
+        return {"status_code": None, "events": [], "raw_text": None}
 
-    from worker.tasks import process_langflow_task  # implemented in services/worker
-
-    job = task_queue.enqueue(
-        process_langflow_task,
-        task_id,
-        req.flow_id,
-        payload,
-        job_id=task_id,
-        result_ttl=3600,
-        failure_ttl=86400,
+    status_code = response.get("data", {}).get("status_code")
+    text = (
+        response.get("data", {})
+        .get("data", {})
+        .get("text")
+        if isinstance(response.get("data"), dict)
+        else None
     )
 
-    return TaskResponse(task_id=task_id, status="pending", message=f"enqueued: {job.id}")
+    events: list[Any] = []
+    if isinstance(text, str):
+        for chunk in text.split("\n\n"):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            try:
+                events.append(json.loads(chunk))
+            except json.JSONDecodeError:
+                events.append({"raw": chunk})
+
+    return {"status_code": status_code, "events": events, "raw_text": text}
 
 
-@app.get("/tasks/{task_id}")
+@app.get("/get_tasks", tags=["internal"])
+def get_tasks():
+    """Return all known task records from the queue backend."""
+    tasks = queue_connector.list_tasks()
+    return {"tasks": tasks, "count": len(tasks)}
+
+
+@app.get("/get_task/{task_id}", tags=["internal"])
 def get_task(task_id: str):
-    # Fetch job by id independent of queue
-    job = Job.fetch(task_id, connection=redis_conn)
-    if not job:
+    task_record = queue_connector.get_task(task_id)
+    if not task_record:
         raise HTTPException(status_code=404, detail="Task not found")
-
-    if job.is_finished:
-        return {"task_id": task_id, "status": "completed", "result": job.result}
-    if job.is_failed:
-        return {"task_id": task_id, "status": "failed", "error": str(job.exc_info)}
-
-    return {"task_id": task_id, "status": job.get_status() or "unknown"}
+    return task_record
 
 
-@app.post("/api/v1/build/{flow_id}/flow")
-def build_flow(
+@app.post("/api/v1/build/{flow_id}/flow", tags=["langflow"])
+async def build_flow(
     flow_id: str,
+    request: Request,
     inputs: Optional[InputValueRequest] = Body(None, embed=True),
     data: Optional[FlowDataRequest] = Body(None, embed=True),
     files: Optional[list[str]] = Query(None),
@@ -108,37 +107,111 @@ def build_flow(
     flow_name: Optional[str] = Query(None),
     event_delivery: EventDeliveryType = Query(EventDeliveryType.POLLING),
 ):
-    """Build and process a flow endpoint (placeholder implementation).
-    
-    This endpoint accepts the same parameters as the Langflow build endpoint
-    but currently just returns OK. Implementation will be added later.
-    """
-    return BuildFlowResponse(
-        status="ok",
-        message="Endpoint received data successfully",
-        flow_id=flow_id
+    """Save original request as-is for worker execution while keeping FastAPI contract."""
+    # Capture raw body to preserve original payload (including unknown keys)
+    body_data: dict[str, Any] = {}
+    body_bytes = await request.body()
+    if body_bytes:
+        try:
+            body_data = json.loads(body_bytes)
+        except json.JSONDecodeError:
+            body_data = {}
+
+    # Fallback to reconstructed body if empty (e.g., when no body provided)
+    if not body_data:
+        reconstructed_body: dict[str, Any] = {}
+        if inputs:
+            reconstructed_body["inputs"] = inputs.model_dump(exclude_none=True)
+        if data:
+            reconstructed_body["data"] = data.model_dump(exclude_none=True)
+        if reconstructed_body:
+            body_data = reconstructed_body
+
+    # Capture query parameters exactly as received
+    query_params: dict[str, Any] = {}
+    if request.query_params:
+        for key, value in request.query_params.multi_items():
+            if key in query_params:
+                existing = query_params[key]
+                if isinstance(existing, list):
+                    existing.append(value)
+                else:
+                    query_params[key] = [existing, value]
+            else:
+                query_params[key] = value
+
+    payload: dict[str, Any] = {
+        "body": body_data,
+        "query_params": query_params,
+    }
+
+    task_record = build_task_record(
+        endpoint=f"/api/v1/build/{flow_id}/flow",
+        method="POST",
+        payload=payload,
     )
+    task_id = queue_connector.enqueue(task_record)
+    return TaskResponse(task_id=task_id, status="pending", message=f"enqueued: {task_id}")
 
 
-@app.get("/api/v1/build/{job_id}/events")
-def get_build_events(
+@app.get("/api/v1/build/{job_id}/events", tags=["langflow"])
+async def get_build_events(
     job_id: str,
-    event_delivery: EventDeliveryType = Query(EventDeliveryType.STREAMING),
+    request: Request,
+    event_delivery: EventDeliveryType = Query(EventDeliveryType.POLLING),
 ):
-    """Retrieve build events (stub implementation)."""
+    """Save original request as-is for worker execution while keeping FastAPI contract."""
+    query_params: dict[str, Any] = {}
+    for key, value in request.query_params.multi_items():
+        if key in query_params:
+            existing = query_params[key]
+            if isinstance(existing, list):
+                existing.append(value)
+            else:
+                query_params[key] = [existing, value]
+        else:
+            query_params[key] = value
+
+    if not query_params and event_delivery:
+        query_params["event_delivery"] = event_delivery.value
+
+    payload: dict[str, Any] = {
+        "query_params": query_params,
+    }
+
+    task_record = build_task_record(
+        endpoint=f"/api/v1/build/{job_id}/events",
+        method="GET",
+        payload=payload,
+    )
+    task_id = queue_connector.enqueue(task_record)
+    return TaskResponse(task_id=task_id, status="pending", message=f"enqueued: {task_id}")
+
+
+@app.get("/parse_task_events/{task_id}", tags=["internal"])
+def parse_task_events(task_id: str):
+    task_record = queue_connector.get_task(task_id)
+    if not task_record:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    parsed_response = _parse_response_events(task_record.get("response"))
+
     return {
-        "job_id": job_id,
-        "event_delivery": event_delivery.value,
-        "status": "pending",
-        "message": "Events retrieval not implemented yet",
+        "task_id": task_id,
+        "status": task_record.get("status"),
+        "request": task_record.get("request"),
+        "response": {
+            "status_code": parsed_response["status_code"],
+            "events": parsed_response["events"],
+            "raw_text": parsed_response["raw_text"],
+        },
     }
 
 
-@app.get("/health")
+@app.get("/health", tags=["internal"])
 def health():
     try:
-        redis_conn.ping()
+        queue_connector.ping()
         return {"status": "healthy"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-

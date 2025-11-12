@@ -16,7 +16,6 @@
       ],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      // Ensure the workspace venv is used
       "python": "${workspaceFolder}/venv/bin/python",
       "env": {
         "LANGFLOW_SKIP_AUTH_AUTO_LOGIN": "true"
@@ -39,6 +38,7 @@
       "justMyCode": false,
       "cwd": "${workspaceFolder}/services/api",
       "env": {
+        "PYTHONPATH": "${workspaceFolder}/services",
         "REDIS_URL": "redis://localhost:6379/0",
         "QUEUE_NAME": "langflow.queue",
         "LANGFLOW_URL": "http://localhost:7860"
@@ -54,6 +54,7 @@
       "justMyCode": false,
       "cwd": "${workspaceFolder}/services/worker",
       "env": {
+        "PYTHONPATH": "${workspaceFolder}/services",
         "REDIS_URL": "redis://localhost:6379/0",
         "LANGFLOW_URL": "http://localhost:7860",
         "QUEUE_NAME": "langflow.queue"
