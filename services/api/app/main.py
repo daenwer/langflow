@@ -81,7 +81,7 @@ def _parse_response_events(response: Optional[dict[str, Any]]) -> dict[str, Any]
 
 @app.get("/get_tasks", tags=["internal"])
 def get_tasks():
-    """Return all known task records from the queue backend."""
+    """Возвращает все известные записи задач из бэкенда очереди."""
     tasks = queue_connector.list_tasks()
     return {"tasks": tasks, "count": len(tasks)}
 
@@ -107,8 +107,8 @@ async def build_flow(
     flow_name: Optional[str] = Query(None),
     event_delivery: EventDeliveryType = Query(EventDeliveryType.POLLING),
 ):
-    """Save original request as-is for worker execution while keeping FastAPI contract."""
-    # Capture raw body to preserve original payload (including unknown keys)
+    """Сохраняет оригинальный запрос как есть для выполнения воркером"""
+    # Захватываем сырое тело запроса для сохрлючая неизвестные ключи)
     body_data: dict[str, Any] = {}
     body_bytes = await request.body()
     if body_bytes:
@@ -117,7 +117,7 @@ async def build_flow(
         except json.JSONDecodeError:
             body_data = {}
 
-    # Fallback to reconstructed body if empty (e.g., when no body provided)
+    # Откат к восстановленному телу, если пусто
     if not body_data:
         reconstructed_body: dict[str, Any] = {}
         if inputs:
@@ -127,7 +127,7 @@ async def build_flow(
         if reconstructed_body:
             body_data = reconstructed_body
 
-    # Capture query parameters exactly as received
+    # Захватываем query параметры точно как получены
     query_params: dict[str, Any] = {}
     if request.query_params:
         for key, value in request.query_params.multi_items():
@@ -160,7 +160,7 @@ async def get_build_events(
     request: Request,
     event_delivery: EventDeliveryType = Query(EventDeliveryType.POLLING),
 ):
-    """Save original request as-is for worker execution while keeping FastAPI contract."""
+    """Сохраняет оригинальный запрос как есть для выполнения воркером."""
     query_params: dict[str, Any] = {}
     for key, value in request.query_params.multi_items():
         if key in query_params:

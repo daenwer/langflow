@@ -17,7 +17,7 @@ def build_task_record(
     method: str,
     payload: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Return a normalized task record ready to be stored/enqueued."""
+    """Возвращает нормализованную запись задачи, готовую для сохранения/постановки в очередь."""
     return {
         "task_id": str(uuid.uuid4()),
         "request": {

@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
-# langflow_queue will be mounted via volume in docker-compose.yml
+# langflow_queue будет смонтирован через volume в docker-compose.yml
 ENV PYTHONPATH=/app
 
 CMD ["python", "worker_runner.py"]

@@ -13,21 +13,17 @@ tmp/
 docker-compose.override.yml
 *.sqlite3
 
-# Redis / DB dumps
 dump.rdb
 *.bak
 
-# Node / frontend artifacts
 node_modules/
 dist/
 build/
 
-# Coverage / test reports
 .coverage
 coverage.xml
 *.pytest_cache/
 
-# Ollama / Langflow data volumes
 ollama/
 langflow-data/
 redis_data/

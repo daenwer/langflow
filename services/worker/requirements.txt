@@ -3,4 +3,3 @@ rq
 httpx
 pydantic
 pydantic-settings
-

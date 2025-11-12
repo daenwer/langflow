@@ -9,7 +9,7 @@ from .base import BaseQueueConnector
 
 
 class RedisQueueConnector(BaseQueueConnector):
-    """Queue connector backed by Redis storage."""
+    """Коннектор очереди на основе хранилища Redis."""
 
     def __init__(
         self,
@@ -49,11 +49,9 @@ class RedisQueueConnector(BaseQueueConnector):
         return self.redis.scan_iter(match=pattern)
 
     def enqueue(self, task_record: dict) -> str:
-        """Persist the task record in Redis and add to queue."""
+        """Сохраняет запись задачи в Redis и добавляет в очередь."""
         task_id = task_record["task_id"]
-        # Store task record
         self._store(task_record)
-        # Add task_id to queue (LPUSH - add to left/head of list)
         self.redis.lpush(self.queue_name, task_id)
         return task_id
 
@@ -81,32 +79,29 @@ class RedisQueueConnector(BaseQueueConnector):
         self._store(existing)
 
     def dequeue(self, timeout: int = 0) -> Optional[dict]:
-        """Dequeue a task from the queue. Returns None if queue is empty.
+        """Извлекает задачу из очереди. Возвращает None, если очередь пуста.
         
         Args:
-            timeout: Blocking timeout in seconds. 0 means non-blocking.
-                    If > 0, uses BLPOP (blocking pop).
+            timeout: Таймаут блокировки в секундах. 0 означает неблокирующий режим.
+                    Если > 0, использует BLPOP (блокирующее извлечение).
         """
         if timeout > 0:
-            # Blocking pop - waits for task to appear
             result = self.redis.blpop(self.queue_name, timeout=timeout)
             if result is None:
                 return None
-            # result is (queue_name, task_id)
             task_id = result[1].decode() if isinstance(result[1], bytes) else result[1]
         else:
-            # Non-blocking pop
             task_id = self.redis.rpop(self.queue_name)
             if task_id is None:
                 return None
             if isinstance(task_id, bytes):
                 task_id = task_id.decode()
         
-        # Get full task record by task_id
+        # Получаем полную запись задачи по task_id
         return self._load(task_id)
 
     def ping(self) -> None:
-        """Check Redis connectivity."""
+        """Проверяет подключение к Redis."""
         self.redis.ping()
 
 
