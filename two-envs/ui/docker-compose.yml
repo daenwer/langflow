@@ -1,0 +1,39 @@
+services:
+  ollama-ui:
+    image: ollama/ollama:latest
+    container_name: ollama-ui
+    restart: unless-stopped
+    ports:
+      - "1434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    volumes:
+      - ollama-ui:/root/.ollama
+
+  langflow-ui-init:
+    image: langflowai/langflow:1.6.5
+    user: "0:0"
+    volumes:
+      - langflow-ui-data:/data
+    command: >
+      sh -lc 'mkdir -p /data && OWNER="$(stat -c %u /data 2>/dev/null || stat -f %u /data)" && [ "$OWNER" = "1000" ] || chown -R 1000:1000 /data'
+    restart: "no"
+
+  langflow-ui:
+    image: langflowai/langflow:1.6.5
+    ports:
+      - "17860:7860"
+    environment:
+      - LANGFLOW_DATABASE_URL=sqlite:////data/langflow_ui.db
+      - LANGFLOW_CONFIG_DIR=/data
+      - LANGFLOW_AUTH_DISABLED=true
+      - LANGFLOW_BACKEND_ONLY=false  # отключает фронт
+      - LANGFLOW_SKIP_AUTH_AUTO_LOGIN=true
+    volumes:
+      - langflow-ui-data:/data
+    depends_on:
+      - langflow-ui-init
+
+volumes:
+  ollama-ui:
+  langflow-ui-data:

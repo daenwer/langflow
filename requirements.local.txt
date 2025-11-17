@@ -1,3 +1,0 @@
--r requirements.txt
--r services/api/requirements.txt
--r services/worker/requirements.txt
