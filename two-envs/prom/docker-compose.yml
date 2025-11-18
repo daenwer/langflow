@@ -1,52 +1,52 @@
 services:
-  ollama-run:
+  langflow-prom-ollama:
     image: ollama/ollama:latest
-    container_name: ollama-run
+    container_name: langflow-prom-ollama
     restart: unless-stopped
     ports:
       - "11434:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
     volumes:
-      - ollama-run:/root/.ollama
+      - langflow-prom-ollama-data:/root/.ollama
     networks:
-      - langflow-run-network
+      - langflow-prom-network
 
-  langflow-run-init:
+  langflow-prom-init:
     image: langflowai/langflow:1.6.5
-    container_name: langflow-run-init
+    container_name: langflow-prom-init
     user: "0:0"
     volumes:
-      - ./data/run:/data
+      - ./data/prom:/data
     command: >
       sh -lc 'mkdir -p /data && OWNER="$(stat -c %u /data 2>/dev/null || stat -f %u /data)" && [ "$OWNER" = "1000" ] || chown -R 1000:1000 /data'
     restart: "no"
     networks:
-      - langflow-run-network
+      - langflow-prom-network
 
-  langflow-run:
+  langflow-prom-backend:
     image: langflowai/langflow:1.6.5
-    container_name: langflow-run
+    container_name: langflow-prom-backend
     ports:
       - "7860:7860"
     environment:
-      - LANGFLOW_DATABASE_URL=sqlite:////data/langflow_run.db
+      - LANGFLOW_DATABASE_URL=sqlite:////data/langflow_prom.db
       - LANGFLOW_CONFIG_DIR=/data
       - LANGFLOW_AUTH_DISABLED=true
       - LANGFLOW_BACKEND_ONLY=true  # отключает фронт
       - LANGFLOW_SKIP_AUTH_AUTO_LOGIN=true
     volumes:
-      - ./data/run:/data
+      - ./data/prom:/data
     depends_on:
-      - langflow-run-init
-      - ollama-run
+      - langflow-prom-init
+      - langflow-prom-ollama
     networks:
-      - langflow-run-network
+      - langflow-prom-network
 
 volumes:
-  ollama-run:
+  langflow-prom-ollama-data:
 
 networks:
-  langflow-run-network:
-    name: langflow-run-network
+  langflow-prom-network:
+    name: langflow-prom-network
     driver: bridge
