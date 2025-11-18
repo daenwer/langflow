@@ -1,28 +1,34 @@
 services:
-  ollama:
+  ollama-ui:
     image: ollama/ollama:latest
     container_name: ollama-ui
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "11435:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
     volumes:
       - ollama-ui:/root/.ollama
+    networks:
+      - langflow-ui-network
 
-  langflow-init:
+  langflow-ui-init:
     image: langflowai/langflow:1.6.5
+    container_name: langflow-ui-init
     user: "0:0"
     volumes:
       - ./data/ui:/data
     command: >
       sh -lc 'mkdir -p /data && OWNER="$(stat -c %u /data 2>/dev/null || stat -f %u /data)" && [ "$OWNER" = "1000" ] || chown -R 1000:1000 /data'
     restart: "no"
+    networks:
+      - langflow-ui-network
 
-  langflow:
+  langflow-ui:
     image: langflowai/langflow:1.6.5
+    container_name: langflow-ui
     ports:
-      - "7860:7860"
+      - "7861:7860"
     environment:
       - LANGFLOW_DATABASE_URL=sqlite:////data/langflow_ui.db
       - LANGFLOW_CONFIG_DIR=/data
@@ -32,8 +38,15 @@ services:
     volumes:
       - ./data/ui:/data
     depends_on:
-      - langflow-init
-      - ollama
+      - langflow-ui-init
+      - ollama-ui
+    networks:
+      - langflow-ui-network
 
 volumes:
   ollama-ui:
+
+networks:
+  langflow-ui-network:
+    name: langflow-ui-network
+    driver: bridge
