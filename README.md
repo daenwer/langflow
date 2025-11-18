@@ -33,6 +33,7 @@ docker exec -it langflow-ift-ollama ollama pull llama3.2
 ## 📖 Использование API
 
 ### 1. Готовим flow в IFT
+- Пример создания flow: https://youtu.be/kFEMtax1yd4?si=ydRmbpzuJ0-S1jLJ
 - Работай в UI: http://localhost:7861  
 - Открой нужный flow и скопируй `flow_id` из адресной строки, например  
   `http://localhost:7861/flow/<flow_id>/folder/b6c23b0d-5c03-41ab-9c6f-bc7a05420256`
